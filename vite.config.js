@@ -1,10 +1,13 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
+const githubRepository = process.env.GITHUB_REPOSITORY;
+const repositoryName = githubRepository?.split("/")[1] || "fishdex-frontend";
+const githubPagesBase = `/${repositoryName}/`;
+
 export default defineConfig({
-  // Relative asset paths make the build work reliably on GitHub Pages
-  // whether it is deployed via Actions or uploaded manually.
-  base: "./",
+  // GitHub Pages serves project sites from /<repo>/, while local dev uses /.
+  base: process.env.GITHUB_ACTIONS === "true" ? githubPagesBase : "/",
   plugins: [vue()],
   server: {
     host: "0.0.0.0",

@@ -27,6 +27,20 @@ La app quedara disponible en:
 
 - [http://localhost:5173](http://localhost:5173)
 
+## Despliegue en GitHub Pages
+
+El proyecto queda preparado para publicarse desde GitHub Pages usando GitHub Actions.
+
+1. En GitHub, entra en `Settings > Pages`.
+2. En `Source`, selecciona `GitHub Actions`.
+3. Haz push a la rama principal y el workflow desplegara automaticamente el contenido de `dist`.
+
+Detalles de la configuracion:
+
+- En despliegues de GitHub Pages, Vite usa la base `/<repo>/`.
+- El router usa `hash history` en Pages para evitar errores al recargar rutas.
+- El build genera tambien `dist/404.html`, lo que ayuda a que Pages resuelva mejor la SPA.
+
 ## Endpoints integrados
 
 - `POST /api/auth/login/`

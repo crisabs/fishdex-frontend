@@ -41,6 +41,26 @@ Detalles de la configuracion:
 - El router usa `hash history` en Pages para evitar errores al recargar rutas.
 - El build genera tambien `dist/404.html`, lo que ayuda a que Pages resuelva mejor la SPA.
 
+## Despliegue en Render
+
+Para Render, este frontend debe desplegarse como `Static Site`, no como `Web Service`.
+
+Opciones:
+
+1. Crear el servicio desde el panel de Render:
+   - `New > Static Site`
+   - `Build Command`: `npm ci && npm run build`
+   - `Publish Directory`: `dist`
+   - Variable de entorno: `VITE_API_BASE_URL=https://TU-BACKEND`
+
+2. O usar el blueprint incluido en [render.yaml](/Users/cristian/Documents/my-web-projects/fishdex/fishdex-frontend/render.yaml).
+
+Importante:
+
+- Añade `VITE_API_BASE_URL` con la URL publica real del backend.
+- Si usas rutas del frontend sin `#`, Render necesita la reescritura `/* -> /index.html`, ya incluida en `render.yaml`.
+- No uses el `Dockerfile` actual para produccion en Render: ese archivo arranca `vite dev`, que es solo para desarrollo local.
+
 ## Endpoints integrados
 
 - `POST /api/auth/login/`

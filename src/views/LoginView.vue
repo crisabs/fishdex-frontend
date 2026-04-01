@@ -2,7 +2,6 @@
 import { reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import PanelCard from "../components/PanelCard.vue";
-import JsonViewer from "../components/JsonViewer.vue";
 import fishingIllustration from "../components/fishing_calm.svg";
 import { authService } from "../services/authService";
 import { fishersService } from "../services/fishersService";
@@ -15,7 +14,6 @@ const loginForm = reactive({
   password: "",
 });
 
-const loginResponse = ref(null);
 const authError = ref("");
 const busy = ref(false);
 
@@ -24,7 +22,7 @@ async function submitLogin() {
   busy.value = true;
 
   try {
-    loginResponse.value = await authService.login({ ...loginForm });
+    await authService.login({ ...loginForm });
     fisherStore.setProfile(await fishersService.getMe());
     router.push("/");
   } catch (error) {
@@ -80,7 +78,6 @@ async function submitLogin() {
           </form>
 
           <div v-if="authError" class="alert error">{{ authError }}</div>
-          <JsonViewer :value="loginResponse" />
         </PanelCard>
       </section>
     </div>

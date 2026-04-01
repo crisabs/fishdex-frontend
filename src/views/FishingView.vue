@@ -4,6 +4,7 @@ import PanelCard from "../components/PanelCard.vue";
 import fishingCalmIllustration from "../components/fishing_calm.svg";
 import fishingCaptureIllustration from "../components/fishing_capture.svg";
 import { api } from "../services/api";
+import { fishService } from "../services/fishService";
 import { fishersService } from "../services/fishersService";
 import { inventoryService } from "../services/inventoryService";
 
@@ -35,13 +36,7 @@ const celebrationBurstItems = [
   "heart",
   "star",
 ];
-const failureBurstItems = [
-  "tear",
-  "cloud",
-  "heart",
-  "tear",
-  "cloud",
-];
+const failureBurstItems = ["tear", "cloud", "heart", "tear", "cloud"];
 let capturePopupTimeoutId = null;
 let celebrationBurstTimeoutId = null;
 let failureBurstTimeoutId = null;
@@ -95,9 +90,14 @@ const baitItems = computed(() =>
 );
 const hasRods = computed(() => rodItems.value.length > 0);
 const canCast = computed(
-  () => hasRods.value && Boolean(selectedRodCode.value) && fishingState.value !== "casting",
+  () =>
+    hasRods.value &&
+    Boolean(selectedRodCode.value) &&
+    fishingState.value !== "casting",
 );
-const canCapture = computed(() => fishingState.value === "hooked" && Boolean(activeFish.value));
+const canCapture = computed(
+  () => fishingState.value === "hooked" && Boolean(activeFish.value),
+);
 const sceneMessage = computed(() => {
   if (fishingState.value === "casting") {
     return "Casting line...";
@@ -116,11 +116,16 @@ const sceneIllustration = computed(() =>
 );
 const actionMessageClass = computed(() => ({
   spotlight: Boolean(actionMessage.value),
-  hooked: actionMessage.value === "Something bit..." && fishingState.value === "hooked",
-  success: /captured|bit|let the fish go|zone changed/i.test(actionMessage.value),
-  failure: /need at least one rod|select one rod|slipped away|nothing bit|cast your rod first/i.test(
+  hooked:
+    actionMessage.value === "Something bit..." &&
+    fishingState.value === "hooked",
+  success: /captured|bit|let the fish go|zone changed/i.test(
     actionMessage.value,
   ),
+  failure:
+    /need at least one rod|select one rod|slipped away|nothing bit|cast your rod first/i.test(
+      actionMessage.value,
+    ),
 }));
 
 function showActionMessage(message, options = {}) {
@@ -181,11 +186,15 @@ async function loadInventoryItems() {
   if (items?.result) {
     inventoryItems.value = items.result;
 
-    if (!rodItems.value.some((item) => item.item_code === selectedRodCode.value)) {
+    if (
+      !rodItems.value.some((item) => item.item_code === selectedRodCode.value)
+    ) {
       selectedRodCode.value = "";
     }
 
-    if (!baitItems.value.some((item) => item.item_code === selectedBaitCode.value)) {
+    if (
+      !baitItems.value.some((item) => item.item_code === selectedBaitCode.value)
+    ) {
       selectedBaitCode.value = "";
     }
   }
@@ -266,6 +275,29 @@ function selectBait(itemCode) {
   selectedBaitCode.value = selectedBaitCode.value === itemCode ? "" : itemCode;
 }
 
+function getFishDisplayName(fish) {
+  return fish?.name || fish?.fish_name || `Fish #${fish?.fish_id ?? "?"}`;
+}
+
+function buildActiveFish(spawnedFish, fishDetailsResponse) {
+  const spawnedResult = spawnedFish?.result || {};
+  const detailedResult = fishDetailsResponse?.result || {};
+
+  return {
+    ...spawnedResult,
+    ...detailedResult,
+    fish_id: spawnedResult.fish_id ?? detailedResult.fish_id,
+    total_weight: spawnedResult.total_weight ?? detailedResult.total_weight,
+    fish_weight: spawnedResult.fish_weight ?? detailedResult.fish_weight,
+    base_weight: spawnedResult.base_weight ?? detailedResult.base_weight,
+    weight: spawnedResult.weight ?? detailedResult.weight,
+    total_length: spawnedResult.total_length ?? detailedResult.total_length,
+    fish_length: spawnedResult.fish_length ?? detailedResult.fish_length,
+    base_length: spawnedResult.base_length ?? detailedResult.base_length,
+    length: spawnedResult.length ?? detailedResult.length,
+  };
+}
+
 async function startFishing() {
   if (fishingState.value === "casting") {
     return;
@@ -297,15 +329,28 @@ async function startFishing() {
     return;
   }
 
+  let fishToHook = spawnedFish.result;
+
+  try {
+    const fishDetailsResponse = await fishService.getFishDetails(
+      spawnedFish.result.fish_id,
+    );
+
+    fishToHook = buildActiveFish(spawnedFish, fishDetailsResponse);
+  } catch (error) {
+    // Fall back to the spawned payload if the catalog lookup fails.
+    globalError.value = error.message;
+  }
+
   if (hookRevealTimeoutId) {
     clearTimeout(hookRevealTimeoutId);
   }
 
   hookRevealTimeoutId = window.setTimeout(() => {
     fishDetails.value = {
-      result: spawnedFish.result,
+      result: fishToHook,
     };
-    forms.fishDetails.fish_id = spawnedFish.result.fish_id;
+    forms.fishDetails.fish_id = fishToHook.fish_id;
     fishingState.value = "hooked";
     showActionMessage("Something bit...", { autoHideMs: 4200 });
     hookRevealTimeoutId = null;
@@ -403,8 +448,8 @@ async function captureFish() {
   }
 
   const captureMessage = response?.result?.captured
-    ? `${activeFish.value.name} captured${payload.used_bait ? ` with ${payload.used_rod} and ${payload.used_bait}` : ` with ${payload.used_rod}`}.`
-    : `${activeFish.value.name} slipped away.`;
+    ? `${getFishDisplayName(activeFish.value)} captured${payload.used_bait ? ` with ${payload.used_rod} and ${payload.used_bait}` : ` with ${payload.used_rod}`}.`
+    : `${getFishDisplayName(activeFish.value)} slipped away.`;
   await Promise.all([loadFisherProfile(), loadInventoryItems()]);
   resetFishingScene();
   showActionMessage(captureMessage);
@@ -564,9 +609,17 @@ onBeforeUnmount(() => {
                 <img
                   class="fishing-scene-image"
                   :src="sceneIllustration"
-                  :alt="fishingState === 'hooked' ? 'Fish on the hook' : 'Calm fishing scene'"
+                  :alt="
+                    fishingState === 'hooked'
+                      ? 'Fish on the hook'
+                      : 'Calm fishing scene'
+                  "
                 />
-                <div v-if="fishingState === 'casting'" class="line-ripple" aria-hidden="true">
+                <div
+                  v-if="fishingState === 'casting'"
+                  class="line-ripple"
+                  aria-hidden="true"
+                >
                   <span />
                   <span />
                   <span />
@@ -576,7 +629,11 @@ onBeforeUnmount(() => {
               <div class="fishing-scene-copy">
                 <p class="mini-badge soft-mini-badge scene-kicker">Fishing</p>
                 <h3>
-                  {{ fishingState === "hooked" && activeFish ? activeFish.name : "Quiet water" }}
+                  {{
+                    fishingState === "hooked" && activeFish
+                      ? activeFish.name
+                      : "Quiet water"
+                  }}
                 </h3>
                 <p class="scene-message">{{ sceneMessage }}</p>
 
@@ -594,11 +651,18 @@ onBeforeUnmount(() => {
                   </div>
                   <div class="friendly-data-item fish-stat-item">
                     <span>Weight</span>
-                    <strong>{{ activeFish.total_weight || activeFish.base_weight }}</strong>
+                    <strong>{{
+                      activeFish.total_weight || activeFish.base_weight
+                    }}</strong>
                   </div>
                   <div class="friendly-data-item fish-stat-item">
                     <span>Price</span>
-                    <strong>{{ activeFish.base_price }}</strong>
+                    <strong>{{
+                      Math.trunc(
+                        Number(activeFish.base_price) *
+                          Number(activeFish.total_weight),
+                      )
+                    }}</strong>
                   </div>
                 </div>
               </div>
@@ -645,7 +709,9 @@ onBeforeUnmount(() => {
             <div class="gear-sections">
               <div class="gear-block">
                 <h4>Rods</h4>
-                <p class="gear-helper-text">Pick one rod. Click again to remove.</p>
+                <p class="gear-helper-text">
+                  Pick one rod. Click again to remove.
+                </p>
                 <div v-if="rodItems.length" class="gear-item-list">
                   <button
                     v-for="item in rodItems"
@@ -666,7 +732,9 @@ onBeforeUnmount(() => {
 
               <div class="gear-block">
                 <h4>Bait</h4>
-                <p class="gear-helper-text">Pick one bait. Click again to remove.</p>
+                <p class="gear-helper-text">
+                  Pick one bait. Click again to remove.
+                </p>
                 <div v-if="baitItems.length" class="gear-item-list">
                   <button
                     v-for="item in baitItems"
@@ -680,7 +748,9 @@ onBeforeUnmount(() => {
                     <strong class="gear-qty">x{{ item.quantity }}</strong>
                   </button>
                 </div>
-                <p v-else class="soft-note">No bait available. You can still fish.</p>
+                <p v-else class="soft-note">
+                  No bait available. You can still fish.
+                </p>
               </div>
             </div>
           </PanelCard>
@@ -1063,7 +1133,12 @@ onBeforeUnmount(() => {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: radial-gradient(circle, #fff2a6, #ffd97a 60%, rgba(255, 217, 122, 0) 72%);
+  background: radial-gradient(
+    circle,
+    #fff2a6,
+    #ffd97a 60%,
+    rgba(255, 217, 122, 0) 72%
+  );
   animation: sparkleFloat 1.8s ease-in-out infinite;
 }
 
@@ -1334,7 +1409,11 @@ onBeforeUnmount(() => {
   border-radius: 28px;
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.95), transparent 50%),
-    linear-gradient(180deg, rgba(228, 245, 255, 0.95), rgba(239, 250, 255, 0.82));
+    linear-gradient(
+      180deg,
+      rgba(228, 245, 255, 0.95),
+      rgba(239, 250, 255, 0.82)
+    );
   border: 1px solid rgba(191, 223, 243, 0.9);
   overflow: hidden;
 }

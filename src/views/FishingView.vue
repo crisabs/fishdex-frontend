@@ -48,6 +48,12 @@ const forms = reactive({
   zone: { new_zone: "RIVER" },
 });
 
+const ZONE_COST = {
+  RIVER: 100,
+  LAKE: 200,
+  OCEAN: 500,
+};
+
 const zoneOptions = [
   {
     value: "RIVER",
@@ -72,10 +78,27 @@ const profileCardItems = computed(() => {
   return [
     { label: "Nickname", value: result.nickname },
     { label: "Level", value: String(result.level) },
-    { label: "Coins", value: String(result.coins) },
-    { label: "Current Zone", value: result.current_zone },
+    { label: "Coins", value: String(result.coins), tone: "coins" },
   ];
 });
+
+const currentZone = computed(
+  () => fisherProfile.value?.result?.current_zone?.toUpperCase() || "",
+);
+const currentZoneLabel = computed(
+  () =>
+    zoneOptions.find((zone) => zone.value === currentZone.value)?.label ||
+    currentZone.value ||
+    "Unknown",
+);
+const selectedZoneLabel = computed(
+  () =>
+    zoneOptions.find((zone) => zone.value === forms.zone.new_zone)?.label ||
+    forms.zone.new_zone,
+);
+const selectedZoneCost = computed(
+  () => ZONE_COST[forms.zone.new_zone] ?? 0,
+);
 
 const activeFish = computed(() => fishDetails.value?.result || null);
 const rodItems = computed(() =>
@@ -571,7 +594,11 @@ onBeforeUnmount(() => {
               <div
                 v-for="item in profileCardItems"
                 :key="item.label"
-                class="friendly-data-item compact-data-item"
+                :class="[
+                  'friendly-data-item',
+                  'compact-data-item',
+                  item.tone ? `tone-${item.tone}` : '',
+                ]"
               >
                 <span>{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
@@ -581,19 +608,42 @@ onBeforeUnmount(() => {
 
             <form class="form-grid" @submit.prevent="changeZone">
               <p class="compact-section-label">Zone</p>
+              <div class="zone-status-card">
+                <div class="zone-status-heading">
+                  <span class="zone-status-label">Current zone</span>
+                  <strong>{{ currentZoneLabel }}</strong>
+                </div>
+                <p>
+                  {{
+                    forms.zone.new_zone === currentZone
+                      ? "Choose a different zone below to move somewhere new."
+                      : `${selectedZoneLabel} costs ${selectedZoneCost} coins to unlock this move.`
+                  }}
+                </p>
+              </div>
               <div class="zone-selector">
                 <button
                   v-for="zone in zoneOptions"
                   :key="zone.value"
                   type="button"
                   class="zone-option"
-                  :class="{ selected: forms.zone.new_zone === zone.value }"
+                  :class="{
+                    selected: forms.zone.new_zone === zone.value,
+                    current: currentZone === zone.value,
+                  }"
                   @click="forms.zone.new_zone = zone.value"
                 >
                   <strong>{{ zone.label }}</strong>
+                  <span class="zone-cost">{{ ZONE_COST[zone.value] }} coins</span>
+                  <span v-if="currentZone === zone.value" class="zone-current-badge">
+                    Current
+                  </span>
                 </button>
               </div>
-              <button class="primary-button" :disabled="busy === 'zone'">
+              <button
+                class="primary-button"
+                :disabled="busy === 'zone' || forms.zone.new_zone === currentZone"
+              >
                 {{
                   busy === "zone" ? "Changing..." : "Change to selected zone"
                 }}
@@ -843,10 +893,65 @@ onBeforeUnmount(() => {
   gap: 2px;
 }
 
+.compact-data-item.tone-coins {
+  border: 1px solid rgba(255, 193, 79, 0.45);
+  background: linear-gradient(135deg, #fff7da, #ffefb0);
+  box-shadow: 0 10px 24px rgba(231, 176, 47, 0.16);
+}
+
+.compact-data-item.tone-coins span {
+  color: #9a6b00;
+}
+
+.compact-data-item.tone-coins strong {
+  color: #b97700;
+}
+
 .compact-section-label {
   margin: 0 0 8px;
   color: #8b84a0;
   font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.zone-status-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(130, 176, 210, 0.22);
+  background: linear-gradient(
+    180deg,
+    rgba(246, 251, 255, 0.98),
+    rgba(235, 246, 252, 0.9)
+  );
+}
+
+.zone-status-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.zone-status-card strong {
+  color: #4f5871;
+  font-size: 1rem;
+}
+
+.zone-status-card p {
+  margin: 0;
+  color: #736986;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.zone-status-label {
+  color: #7a86a2;
+  font-size: 0.74rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1489,11 +1594,47 @@ onBeforeUnmount(() => {
 }
 
 .zone-option {
+  position: relative;
+  display: grid;
+  gap: 4px;
   padding: 12px 14px;
+  text-align: left;
 }
 
-.zone-option span {
-  display: none;
+.zone-option strong {
+  color: #4f5871;
+}
+
+.zone-cost {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 198, 92, 0.18);
+  color: #9f7006;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.zone-current-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(88, 176, 214, 0.18);
+  color: #2f76a1;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.zone-option.current {
+  border-color: rgba(88, 176, 214, 0.45);
+  background: linear-gradient(
+    180deg,
+    rgba(242, 250, 255, 0.98),
+    rgba(226, 242, 250, 0.94)
+  );
 }
 
 .gear-sections {
